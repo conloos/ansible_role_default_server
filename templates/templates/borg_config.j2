@@ -1,0 +1,49 @@
+#!/bin/bash
+
+##
+## Save backup to directory named after hostname
+##
+
+LOG="backup.log"
+HOST=`hostname`
+DOMAIN=`hostname -d`
+EMAIL_BACKUP_ADMIN={{EMAIL_BACKUP_ADMIN}}
+SERVER_USER=backup
+SERVER_FQDN={{ansible_fqdn}}
+SERVER_PORT=22
+SERVER_PATH={{ansible_fqdn | regex_replace('^\\/|\\/$', '') }} # Stripped leading and trailing slashes from path
+REPOSITORY="ssh://$SERVER_USER@$SERVER_FQDN:$SERVER_PORT/$SERVER_PATH/$HOST"
+
+
+##
+## Write output to logfile
+##
+
+exec > >(tee -i ${LOG})
+exec 2>&1
+
+
+echo "###### Starting backup on $(date) ######"
+
+##
+## Sync backup data
+##
+
+#echo "Syncing backup files ..."
+#borg create -v --stats                                  \
+#	    $REPOSITORY::'{now:%Y-%m-%d_%H:%M}'                 \
+#	        /root/backup                                        \
+#		    /etc                                                \
+#		        /var/www                                            \
+#			    /var/vmail                                          \
+#			        /storage
+
+
+echo "###### Finished backup on $(date) ######"
+
+
+##
+## Send mail to admin
+##
+
+mailx -s "Backup | "$HOST $EMAIL_BACKUP_ADMIN < $LOG

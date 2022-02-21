@@ -1,0 +1,5 @@
+---
+- name: Verify that required parameters are set
+  assert:
+    that: []
+...

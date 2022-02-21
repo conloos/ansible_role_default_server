@@ -1,0 +1,14 @@
+---
+# source: https://linuxhandbook.com/things-to-do-after-installing-linux-server/
+- name: purge whoopsie - Ubuntu Error Reporting
+  ansible.builtin.apt:
+    name: '{{ item }}'
+    state: absent
+    update_cache: true
+  register: apt_status
+  until: apt_status is success
+  delay: 6
+  retries: 10
+  with_items:
+    - whoopsie
+  when: ansible_os_family == 'Debian'
