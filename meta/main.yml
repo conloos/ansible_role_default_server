@@ -14,4 +14,4 @@ galaxy_info:
   galaxy_tags: []
 
 dependencies:
-  - default_generic
+  - ansible_role_default_generic
