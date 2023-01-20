@@ -1,0 +1,95 @@
+---
+- name: Install monitoring environment
+  block:
+    - name: Add group for monitoring user
+      ansible.builtin.group:
+        name: "{{ vault_check_mk.monitoring_group }}"
+        state: present
+
+    - name: Add monitoring user
+      ansible.builtin.user:
+        name: "{{ vault_check_mk.monitoring_user }}"
+        shell: "/bin/bash"
+        groups: "{{ vault_check_mk.monitoring_group }}"
+        comment: "Monitoring User Account"
+        append: yes
+
+    - name: Set authorized key taken from file
+      ansible.posix.authorized_key:
+        user: "{{ vault_check_mk.monitoring_user }}"
+        state: present
+        key: "{{ vault_check_mk.monitoring_user_ssh_authorized_keys }}"
+
+    - name: Add sudo users
+      community.general.sudoers:
+        name: "monitoring"
+        state: present
+        user: "{{ vault_check_mk.monitoring_user }}"
+        nopassword: true
+        commands: "/bin/check_mk_agent"
+
+    - name: Create temp directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: temp
+      register: tempfilepath
+
+    - name: Purge old package
+      ansible.builtin.apt:
+        update_cache: true
+        name: "check-mk-agent"
+        state: absent
+        purge: true
+
+    - name: Download agent package
+      ansible.builtin.get_url:
+        url: "{{ cmk_agent_url }}/{{ item }}"
+        dest: "{{ tempfilepath.path }}/{{ item }}"
+      with_items: "{{ cmk_agent_package }}"
+
+    - name: Install agent
+      ansible.builtin.apt:
+        deb: "{{ tempfilepath.path }}/{{ item }}"
+      with_items: "{{ cmk_agent_package }}"
+
+    - name: Facts
+      ansible.builtin.setup:
+
+    # source: https://docs.checkmk.com/latest/en/web_api.html
+    - name: Add host to monitoring system
+      ansible.builtin.uri:
+        url: "{{ cmk_webapi_url }}?action=add_host&_username={{ vault_check_mk.automation_user }}&_secret={{ vault_check_mk.automation_user_password }}&request_format=json&output_format=json"
+        return_content: yes
+        method: POST
+        body_format: raw
+        body: 'request={"hostname":"{{ ansible_host }}", "folder":"ssh_based", "attributes":{"ipaddress":"{{ ansible_default_ipv4["address"] }}", "site":"{{ cmk_site_name}}"}}'
+    
+    - name: Start service discovery on host
+      ansible.builtin.uri:
+        url: "{{ cmk_webapi_url }}?action=discover_services&_username={{ vault_check_mk.automation_user }}&_secret={{ vault_check_mk.automation_user_password }}&request_format=json&output_format=json"
+        method: POST
+        body_format: raw
+        body: 'request={"hostname":"{{ ansible_host }}"}'
+        status_code: 200
+
+    - name: Apply changes at check_mk
+      ansible.builtin.uri:
+        url: "{{ cmk_webapi_url }}?action=activate_changes&_username={{ vault_check_mk.automation_user }}&_secret={{ vault_check_mk.automation_user_password }}&request_format=json&output_format=json"
+        method: POST
+        body_format: raw
+        body: 'request={"sites":["{{ cmk_site_name }}"]}'
+        status_code: 200
+
+    - name: Activate TLS (prevent error message)
+      ansible.builtin.shell:
+        cmd: "/usr/bin/cmk-agent-ctl register --hostname {{ ansible_host }} --server {{ cmk_fqdn }}:8000 --site {{ cmk_site_name }} --trust-cert --user {{ vault_check_mk.automation_user }} --password {{ vault_check_mk.automation_user_password}}"
+
+  always:
+    - name: Cleanup temp directory
+      ansible.builtin.file:
+        path: "{{ tempfilepath.path }}"
+        state: absent
+      delegate_to: localhost
+  tags:
+    - install-monitoring
+...

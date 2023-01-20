@@ -1,0 +1,9 @@
+---
+cmk_fqdn: "checkmk.bodomos.lan"
+cmk_site_name: "cmk"
+cmk_agent_package:
+  - check-mk-agent_2.1.0p17-1_all.deb
+cmk_agent_url: "http://{{ cmk_fqdn }}:8080/{{ cmk_site_name }}/check_mk/agents"
+cmk_webapi_url: "http://{{ cmk_fqdn }}:8080/{{ cmk_site_name }}/check_mk/webapi.py"
+cmk_ssh_folder: "SSH Based"
+...
